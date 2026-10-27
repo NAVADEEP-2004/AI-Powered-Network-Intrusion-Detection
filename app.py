@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+import matplotlib.pyplot as plt
 
 # Project paths
 BASE_DIR = Path(__file__).resolve().parent
@@ -101,22 +102,28 @@ st.caption(
 
 import joblib
 
+
+# Network Traffic Prediction
 st.divider()
 st.header("🔎 Network Traffic Prediction")
 
 st.write(
-    "Choose a sample from the held-out test dataset and classify its traffic."
+    "Choose a sample from the held-out test dataset "
+    "and classify its traffic."
 )
 
 @st.cache_resource
 def load_model():
-    return joblib.load("artifacts/random_forest.pkl")
+    return joblib.load(ARTIFACTS_DIR / "random_forest.pkl")
 
 
 @st.cache_data
 def load_test_data():
-    X_test = joblib.load("artifacts/X_test.pkl")
-    y_test = joblib.load("artifacts/y_test.pkl")
+    sample_df = pd.read_csv(
+        ARTIFACTS_DIR / "deployment_sample.csv"
+    )
+    X_test = sample_df.drop(columns=["label"])
+    y_test = sample_df["label"]
     return X_test, y_test
 
 
@@ -132,7 +139,6 @@ try:
         step=1
     )
 
-    
     if st.button("Predict traffic"):
         idx = int(sample_index)
 
@@ -160,10 +166,8 @@ try:
             sample.T.rename(columns={sample.index[0]: "Value"})
         )
 
-
 except Exception as e:
     st.error(f"Could not load the model or test data: {e}")
-
 
 # Feature Importance
 st.divider()
@@ -183,11 +187,8 @@ try:
     importances = rf.feature_importances_
 
     # Use feature names recorded by the trained model
-    if hasattr(rf, "feature_names_in_"):
-        feature_names = rf.feature_names_in_
-    else:
-        X_train = joblib.load(ARTIFACTS_DIR / "X_train.pkl")
-        feature_names = X_train.columns
+    
+    feature_names = rf.feature_names_in_
 
     importance_df = pd.DataFrame({
         "Feature": feature_names,
@@ -198,10 +199,30 @@ try:
         "Importance", ascending=False
     ).head(15)
 
-    st.bar_chart(
-        importance_df.set_index("Feature")["Importance"],
-        horizontal=True
+        
+    # Keep the original feature names and importance values
+    chart_df = importance_df.copy()
+
+    # Shorten labels only for the chart display
+    chart_df["Display Feature"] = (
+        chart_df["Feature"]
+        .str.replace("Init_Win_bytes_backward", "Init Win Bytes Backward", regex=False)
+        .str.replace("Init_Win_bytes_forward", "Init Win Bytes Forward", regex=False)
     )
+
+    st.bar_chart(
+        chart_df.set_index("Display Feature")["Importance"],
+        horizontal=True,
+        height=500
+    )
+
+    # Show exact names separately for reference
+    with st.expander("View complete feature names"):
+        st.dataframe(
+            importance_df[["Feature", "Importance"]],
+            use_container_width=True,
+            hide_index=True
+        )
 
     st.caption(
         "These scores indicate the model's relative feature importance; "
