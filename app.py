@@ -72,6 +72,21 @@ comparison_image = ARTIFACTS_DIR / "model_comparison.png"
 
 if comparison_path.exists():
     comparison_df = pd.read_csv(comparison_path)
+
+    metric_columns = [
+        "Accuracy",
+        "Balanced Accuracy",
+        "Attack Precision",
+        "Attack Recall",
+        "Attack F1-score",
+    ]
+
+    for column in metric_columns:
+        if column in comparison_df.columns:
+            comparison_df[column] = pd.to_numeric(
+                comparison_df[column], errors="coerce"
+            ).map(lambda value: f"{value:.2%}" if pd.notna(value) else "N/A")
+
     st.dataframe(comparison_df, use_container_width=True)
 else:
     st.warning("Model comparison CSV was not found.")
@@ -91,6 +106,13 @@ evaluation_path = ARTIFACTS_DIR / "final_evaluation.csv"
 
 if evaluation_path.exists():
     evaluation_df = pd.read_csv(evaluation_path)
+
+    for column in metric_columns:
+        if column in evaluation_df.columns:
+            evaluation_df[column] = pd.to_numeric(
+                evaluation_df[column], errors="coerce"
+            ).map(lambda value: f"{value:.2%}" if pd.notna(value) else "N/A")
+
     st.dataframe(evaluation_df, use_container_width=True)
 else:
     st.info("Detailed evaluation CSV is not available.")
@@ -149,10 +171,7 @@ try:
         predicted_name = "BOT" if prediction == 1 else "BENIGN"
         actual_name = "BOT" if actual_label == 1 else "BENIGN"
 
-        if prediction == 1:
-            st.error(f"Prediction: {predicted_name}")
-        else:
-            st.success(f"Prediction: {predicted_name}")
+        st.info(f"Model prediction: {predicted_name}")
 
         st.write(f"**Actual label:** {actual_name}")
 
@@ -160,6 +179,24 @@ try:
             st.success("Correct prediction!")
         else:
             st.warning("Incorrect prediction.")
+
+            if actual_label == 1 and prediction == 0:
+                st.error(
+                    "False negative: this sample is actually BOT traffic, "
+                    "but the model classified it as BENIGN. "
+                    "This represents a missed attack."
+                )
+
+            elif actual_label == 0 and prediction == 1:
+                st.warning(
+                    "False positive: this sample is actually BENIGN traffic, "
+                    "but the model classified it as BOT."
+                )
+
+        st.caption(
+            "A BENIGN prediction is not a guarantee that traffic is safe. "
+            "This is an educational model evaluated on prepared test samples."
+        )
 
         st.write("Sample features:")
         st.dataframe(
